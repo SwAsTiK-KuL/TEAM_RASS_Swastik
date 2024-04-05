@@ -5,15 +5,15 @@ const bcrypt = require("bcrypt");
 const saltrounds = 11;
 router = express.Router();
 const JWT_SECRET = require("../config");
-const { userSignupSchema, userSigninSchema } = require("./userSchema");
-const { UserDB } = require("../db/db");
-const userAuthMiddleware = require("./userMiddleware");
+const { sellerSignupSchema, sellerSigninSchema } = require("./sellerSchema");
+const { SellerDb } = require("../db/db");
+const sellerAuthMiddleware = require("./sellerMiddleware");
 router.post("/signup", async (req, res) => {
-  const userSignupData = req.body;
-  const parsedPayload = userSignupSchema.safeParse(userSignupData);
-  let isUserPresent = null;
+  const sellerSignupData = req.body;
+  const parsedPayload = sellerSignupSchema.safeParse(sellerSignupData);
+  let isSellerPresent = null;
   try {
-    isUserPresent = await UserDB.find({
+    isSellerPresent = await SellerDb.find({
       $or: [
         { username: parsedPayload.data.username },
         { email: parsedPayload.data.email },
@@ -23,12 +23,12 @@ router.post("/signup", async (req, res) => {
     console.log(err);
   }
   if (parsedPayload.success) {
-    if (isUserPresent.length > 0) {
-      res.status(403).json({ msg: "User exist in db" });
+    if (isSellerPresent.length > 0) {
+      res.status(403).json({ msg: "Seller exist in db" });
     } else {
       let hashedPassword;
       try {
-        let unhashedUserData = parsedPayload.data;
+        let unhashedSellerData = parsedPayload.data;
         try {
           hashedPassword = await bcrypt.hash(
             parsedPayload.data.password,
@@ -38,8 +38,11 @@ router.post("/signup", async (req, res) => {
           console.log(err);
           res.status(400).json({ msg: "Error signing up" });
         }
-        const finalUserData = { ...unhashedUserData, password: hashedPassword };
-        await UserDB.create(finalUserData);
+        const finalSellerData = {
+          ...unhashedSellerData,
+          password: hashedPassword,
+        };
+        await SellerDb.create(finalSellerData);
       } catch (err) {
         console.log(err);
         res.status(403).json({ msg: "Error signing in" });
@@ -53,25 +56,23 @@ router.post("/signup", async (req, res) => {
 });
 router.post("/signin", async (req, res) => {
   const { username, password } = req.body;
-  const userSigninData = req.body;
-  const parsedPayload = userSigninSchema.safeParse(userSigninData);
+  const sellerSigninData = req.body;
+  const parsedPayload = sellerSigninSchema.safeParse(sellerSigninData);
   if (!parsedPayload.success) {
     res.status(400).json({ msg: "Invalid Credentials" });
     return;
   }
   try {
-    // Find user by username or email
-    const user = await UserDB.findOne({
+    const seller = await SellerDb.findOne({
       $or: [{ username: username }, { email: username }],
     });
 
-    if (!user) {
-      // User not found
+    if (!seller) {
       return res.status(401).json({ msg: "Invalid username or password" });
     }
 
     // Compare hashed password with provided password
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    const passwordMatch = await bcrypt.compare(password, seller.password);
 
     if (!passwordMatch) {
       // Passwords don't match
@@ -79,15 +80,15 @@ router.post("/signin", async (req, res) => {
     }
 
     // Passwords match, generate JWT token
-    const token = jwt.sign({ username: user.username }, JWT_SECRET);
+    const token = jwt.sign({ username: seller.username }, JWT_SECRET);
     return res.status(200).json({ token });
   } catch (err) {
     console.error("Error signing in:", err);
     return res.status(500).json({ msg: "Internal Server Error" });
   }
 });
-router.get("/allProducts", userAuthMiddleware, async (req, res) => {
-  console.log(req.user);
-  res.status(200).json({ msg: "middleware success" });
+router.post("/postProduct", sellerAuthMiddleware, async (req, res) => {
+  console.log(req.seller);
+  res.status(200).json({});
 });
 module.exports = router;
